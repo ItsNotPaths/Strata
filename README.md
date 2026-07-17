@@ -9,6 +9,12 @@ dual-contoured tri-soup. The editor is a frontend bolted onto that compiler:
 a real scrolling/zooming 2D vector editor (all editing) piloting a live 3D
 pure preview, Hammer-style. See `DESIGN.md`.
 
+![The editor: 2D vector document on top (the only editing surface), live-compiled 3D preview below, value sidebar right](screenshots/editor-overview.png)
+
+| ![A fall-line Hint folds the arena floor: per-node heights grade the sheet, and the derived cliff shrinks to a walkable ramp where the line crosses it](screenshots/hint-fall-line.png) | ![A Path sweeps a void (a stream) through the arena; bridges, cliffs, and every wall are compiler-derived, never drawn](screenshots/path-swept-void.png) |
+|:--:|:--:|
+| *Fall-line Hint: node heights fold the floor, cliff → ramp* | *Swept-void Path; all walls/bridges compiler-derived* |
+
 ## Using strata as a game's level pipeline
 
 Vendor `src/engine` (plain Odin, `core:` imports only) and wire the compile
