@@ -781,11 +781,22 @@ noise_weight :: #force_inline proc(d2, dz: f32) -> f32 {
 // sdf_sample — signed distance at a world point (x, up, z); negative inside
 // rock. Plan mapping: world (x, z) = document (x, y).
 sdf_sample :: proc(w: ^Eval_World, p: [3]f32) -> Sdf_Sample {
+	return sdf_sample_scoped(w, p, w.order)
+}
+
+// sdf_sample_scoped — sdf_sample over a SUBSET of w.order (kept in z-order).
+// The mesher passes each chunk's influence-culled component list: a component
+// whose padded plan footprint (dirty_min/max — the same "can flip the
+// composed sign" bound the incremental dirty region uses) misses the chunk's
+// sampling rect contributes exactly nothing there (its CSG op is identity
+// outside the pad), so the result is bit-identical to the full loop and the
+// per-sample cost stops scaling with total component count.
+sdf_sample_scoped :: proc(w: ^Eval_World, p: [3]f32, order: []i32) -> Sdf_Sample {
 	plan := [2]f32{p.x, p.z}
 	d := f32(-1e9) // infinite solid rock (§1: draw the void)
 	owner := i32(-1)
 
-	for idx in w.order {
+	for idx in order {
 		ec := &w.comps[idx]
 		if !ec.active {continue}
 		comp := &w.doc.components[idx]
