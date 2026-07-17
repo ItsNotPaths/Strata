@@ -9,12 +9,6 @@ dual-contoured tri-soup. The editor is a frontend bolted onto that compiler:
 a real scrolling/zooming 2D vector editor (all editing) piloting a live 3D
 pure preview, Hammer-style. See `DESIGN.md`.
 
-Successor to `dymeta-tool`'s authoring model (its spline-op editing was
-fiddling with the solution instead of stating intent); keeps its backend DNA —
-texgen recipe materials, angle splitter, box3d — and folly-editor's
-derived-walls idea. Tool-only repo, game-agnostic (`folly` is the first
-target).
-
 ## Using strata as a game's level pipeline
 
 Vendor `src/engine` (plain Odin, `core:` imports only) and wire the compile
