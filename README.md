@@ -1,20 +1,43 @@
 # strata-tool
 
-At its core an **svg → obj compiler**: the level *is* a top-down 2D vector
-document — an **extended SVG** (`strata:` attribute namespace) of splines and
-closed shapes carrying height fields, materials, and gameplay tags — and all
-3D (terrain, walls, meshes, collision) is derived by a deterministic
-evaluator: fields → world SDF → narrow-band dual-contoured tri-soup →
-`level.obj` + a game-agnostic `level.txt` sidecar (meta lines, materials,
-markers, portals). The editor is a frontend bolted onto that compiler: a real
-scrolling/zooming 2D vector editor (all editing) piloting a live 3D pure
-preview, Hammer-style. See `DESIGN.md`.
+At its core a **vendorable svg → 3D compiler**: the level *is* a top-down 2D
+vector document — an **extended SVG** (`strata:` attribute namespace) of
+splines and closed shapes carrying height fields, materials, and gameplay
+tags — and all 3D (terrain, walls, meshes, collision) is derived by a
+deterministic, threaded evaluator: fields → world SDF → narrow-band
+dual-contoured tri-soup. The editor is a frontend bolted onto that compiler:
+a real scrolling/zooming 2D vector editor (all editing) piloting a live 3D
+pure preview, Hammer-style. See `DESIGN.md`.
 
 Successor to `dymeta-tool`'s authoring model (its spline-op editing was
 fiddling with the solution instead of stating intent); keeps its backend DNA —
 texgen recipe materials, angle splitter, box3d — and folly-editor's
-derived-walls idea. Tool-only repo, game-agnostic: any game that reads
-obj + the sidecar txt can consume its levels (`folly` is the first target).
+derived-walls idea. Tool-only repo, game-agnostic (`folly` is the first
+target).
+
+## Using strata as a game's level pipeline
+
+Vendor `src/engine` (plain Odin, `core:` imports only) and wire the compile
+into your load path — levels ship as the `.strata.svg` files themselves, and
+nothing derived is ever written to the player's disk:
+
+    doc, ok := engine.document_load_svg(path)     // keep doc alive: the world
+    world   := engine.eval_world_build(&doc, step) // holds a ^Document
+    chunks  := engine.mesh_extract(&world)         // threaded; tri-soup + mats
+    // markers/entities: doc.components (.Marker kind), heights via
+    // engine.surface_height(&world, pos); level metadata: doc.meta (opaque
+    // lines from <strata:meta>); walkability oracle: engine.topo_data_build.
+    // Cleanup: mesh_chunk_destroy each chunk, eval_world_destroy,
+    // document_destroy — in that order.
+
+Determinism is contract: same document + step ⇒ bit-identical mesh
+(`engine.mesh_checksum`), regardless of thread count (`STRATA_THREADS`
+overrides the default of all logical cores).
+
+Diagnostics (parse warnings, eval skips, I/O failures) go through
+`engine.diag_set_sink(sink, user)` — route them into your own logging/UI;
+the default sink prints to stderr. Emits happen only from serial phases
+(load/save/eval build), never from mesh workers, so sinks need no locking.
 
 Built with Odin; one binary holds the headless CLI (eval / dump / topo) and
 the M3 editor: SDL3_GPU 2D vector canvas + live 3D preview, Dear ImGui chrome.
@@ -23,14 +46,15 @@ sibling `dymeta-tool` checkout.
 
 ## Layout
 
-    src/engine/   THE COMPILER. document schema (document.odin), extended-SVG
-                  reader/writer (svg.odin / svg_write.odin), 2D geometry
-                  (geom.odin), harmonic height-field solver (field.odin),
-                  world SDF evaluator — smooth CSG, noise, cliff fins
-                  (sdf.odin), narrow-band dual contouring (mesh.odin), topo
-                  oracle (topo.odin), OBJ + level-sidecar + checksum output
-                  stage (export.odin)
-    src/tool/     headless CLI (main.odin) + M3 editor: shell/frame loop
+    src/engine/   THE COMPILER (vendorable, core-only). document schema
+                  (document.odin), extended-SVG reader/writer (svg.odin /
+                  svg_write.odin), 2D geometry (geom.odin), harmonic
+                  height-field solver (field.odin), world SDF evaluator —
+                  smooth CSG, noise, cliff fins (sdf.odin), threaded
+                  narrow-band dual contouring + checksum (mesh.odin), topo
+                  oracle (topo.odin)
+    src/tool/     headless CLI (main.odin), OBJ + sidecar dump for external
+                  viewers (export_obj.odin) + M3 editor: shell/frame loop
                   (editor.odin), 2D canvas render + edit (canvas2d.odin,
                   canvas_edit.odin), 3D preview (view3d.odin, camera3d.odin),
                   sidebar (sidebar.odin), GPU helpers (gpu.odin), earcut

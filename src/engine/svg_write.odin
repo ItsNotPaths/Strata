@@ -74,7 +74,7 @@ document_save_svg :: proc(doc: ^Document, path: string) -> bool {
 	fmt.sbprintln(&b, "</svg>")
 
 	if werr := os.write_entire_file(path, b.buf[:]); werr != nil {
-		fmt.eprintfln("svg: cannot write %q: %v", path, werr)
+		diagf(.Error, "svg: cannot write %q: %v", path, werr)
 		return false
 	}
 	return true

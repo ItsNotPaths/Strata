@@ -504,3 +504,27 @@ provenance_add :: proc(prov: ^[dynamic]i32, comp: i32) {
 	for have in prov {if have == comp {return}}
 	append(prov, comp)
 }
+
+// mesh_checksum — FNV-1a over quantized vertex data and triangle counts: the
+// golden-test / STRATA_VERIFY_INCR primitive (DESIGN.md §5). Catches geometry
+// drift without storing meshes; part of the compiler's determinism contract,
+// which is why it lives here and not with any exporter.
+mesh_checksum :: proc(chunks: []Mesh_Chunk) -> u32 {
+	h := u32(0x811c9dc5)
+	mix :: #force_inline proc(h: ^u32, v: u32) {
+		x := v
+		for _ in 0 ..< 4 {
+			h^ = (h^ ~ (x & 0xff)) * 16777619
+			x >>= 8
+		}
+	}
+	for &c in chunks {
+		for a in 0 ..< 3 {mix(&h, transmute(u32)c.cell[a])}
+		for v in c.verts {
+			for a in 0 ..< 3 {mix(&h, transmute(u32)i32(math.round(v.pos[a] * 1024)))}
+			mix(&h, u32(v.mat))
+		}
+		mix(&h, u32(len(c.indices)))
+	}
+	return h
+}

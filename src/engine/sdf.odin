@@ -167,13 +167,13 @@ eval_world_build :: proc(doc: ^Document, step: f32, old: ^Eval_World = nil) -> (
 		switch comp.kind {
 		case .Sector, .Solid, .Bridge, .Cliff:
 			if !comp.closed {
-				fmt.eprintfln("eval: %s %q is not closed, skipped",
+				diagf(.Warn, "eval: %s %q is not closed, skipped",
 					comp.kind, name32_str(&comp.name))
 				continue
 			}
 			ec.poly = component_flatten(&comp, step * 0.25, &ec.seg_start)
 			if len(ec.poly) < 3 {
-				fmt.eprintfln("eval: %s %q degenerates to <3 points, skipped",
+				diagf(.Warn, "eval: %s %q degenerates to <3 points, skipped",
 					comp.kind, name32_str(&comp.name))
 				continue
 			}
@@ -183,7 +183,7 @@ eval_world_build :: proc(doc: ^Document, step: f32, old: ^Eval_World = nil) -> (
 			// swept void: the centerline flattens; per-point width/floor/
 			// ceiling lerp along it by arc length (path_attrs).
 			if len(comp.points) < 2 {
-				fmt.eprintfln("eval: Path %q has <2 points, skipped", name32_str(&comp.name))
+				diagf(.Warn, "eval: Path %q has <2 points, skipped", name32_str(&comp.name))
 				continue
 			}
 			ec.poly = component_flatten(&comp, step * 0.25, &ec.seg_start)
@@ -228,7 +228,7 @@ eval_world_build :: proc(doc: ^Document, step: f32, old: ^Eval_World = nil) -> (
 	}
 
 	if !any_active {
-		fmt.eprintfln("eval: document has no evaluable components")
+		diagf(.Error, "eval: document has no evaluable components")
 		delete(order)
 		return
 	}
@@ -268,7 +268,7 @@ eval_world_build :: proc(doc: ^Document, step: f32, old: ^Eval_World = nil) -> (
 			placed += 1
 		}
 		if placed == 0 {
-			fmt.eprintfln("eval: Hint %q lies over no sculptable shape, ignored",
+			diagf(.Warn, "eval: Hint %q lies over no sculptable shape, ignored",
 				name32_str(&comp.name))
 		}
 	}

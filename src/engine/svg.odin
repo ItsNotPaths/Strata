@@ -16,18 +16,18 @@ import "core:strconv"
 import "core:strings"
 
 // document_load_svg parses `path` into a Document. On any structural error it
-// eprintfln's and returns ok=false; per-element oddities warn and skip so a
-// half-sketched Inkscape file still loads what it can.
+// emits a diag (diag.odin) and returns ok=false; per-element oddities warn
+// and skip so a half-sketched Inkscape file still loads what it can.
 document_load_svg :: proc(path: string) -> (doc: Document, ok: bool) {
 	xdoc, err := xml.load_from_file(path, {flags = {.Ignore_Unsupported, .Decode_SGML_Entities}})
 	if err != .None {
-		fmt.eprintfln("svg: %q: parse error %v", path, err)
+		diagf(.Error, "svg: %q: parse error %v", path, err)
 		return {}, false
 	}
 	defer xml.destroy(xdoc)
 
 	if xdoc.element_count == 0 || xdoc.elements[0].ident != "svg" {
-		fmt.eprintfln("svg: %q: root element is not <svg>", path)
+		diagf(.Error, "svg: %q: root element is not <svg>", path)
 		return {}, false
 	}
 
@@ -55,7 +55,7 @@ load_children :: proc(doc: ^Document, xdoc: ^xml.Document, parent: xml.Element_I
 		case "defs", "metadata", "title", "desc", "style", "namedview", "sodipodi:namedview":
 		// editor/browser furniture, ignored silently
 		case:
-			fmt.eprintfln("svg: %q: skipping unsupported element <%s>", path, el.ident)
+			diagf(.Warn, "svg: %q: skipping unsupported element <%s>", path, el.ident)
 		}
 	}
 }
@@ -88,7 +88,7 @@ attr :: proc(el: ^xml.Element, key: string) -> (string, bool) {
 attr_f32 :: proc(el: ^xml.Element, key: string, def: f32) -> f32 {
 	if s, found := attr(el, key); found {
 		if v, pok := strconv.parse_f32(strings.trim_space(s)); pok {return v}
-		fmt.eprintfln("svg: attribute %s=%q is not a number, using %v", key, s, def)
+		diagf(.Warn, "svg: attribute %s=%q is not a number, using %v", key, s, def)
 	}
 	return def
 }
@@ -100,7 +100,7 @@ attr_f32 :: proc(el: ^xml.Element, key: string, def: f32) -> f32 {
 attr_u32 :: proc(el: ^xml.Element, key: string, def: u32) -> u32 {
 	if s, found := attr(el, key); found {
 		if v, pok := strconv.parse_uint(strings.trim_space(s), 10); pok {return u32(v)}
-		fmt.eprintfln("svg: attribute %s=%q is not an unsigned integer, using %v", key, s, def)
+		diagf(.Warn, "svg: attribute %s=%q is not an unsigned integer, using %v", key, s, def)
 	}
 	return def
 }
@@ -127,18 +127,18 @@ load_common_attrs :: proc(c: ^Component, el: ^xml.Element) {
 load_path :: proc(doc: ^Document, el: ^xml.Element, path: string) {
 	d, has_d := attr(el, "d")
 	if !has_d {
-		fmt.eprintfln("svg: %q: <path> without d attribute, skipped", path)
+		diagf(.Warn, "svg: %q: <path> without d attribute, skipped", path)
 		return
 	}
 	if _, has_tf := attr(el, "transform"); has_tf {
-		fmt.eprintfln("svg: %q: <path> has a transform, which strata ignores — flatten it", path)
+		diagf(.Warn, "svg: %q: <path> has a transform, which strata ignores — flatten it", path)
 	}
 
 	c: Component
 	c.z_order = i32(len(doc.components))
 	points, closed, pok := parse_path_d(d)
 	if !pok {
-		fmt.eprintfln("svg: %q: unparseable path d=%q, skipped", path, d)
+		diagf(.Warn, "svg: %q: unparseable path d=%q, skipped", path, d)
 		delete(points)
 		return
 	}
@@ -153,7 +153,7 @@ load_path :: proc(doc: ^Document, el: ^xml.Element, path: string) {
 		c.kind = .Sector
 		c.ceiling = SKY
 	} else {
-		fmt.eprintfln("svg: %q: path with strata:kind=%q (closed=%v) skipped", path, kind_s, closed)
+		diagf(.Warn, "svg: %q: path with strata:kind=%q (closed=%v) skipped", path, kind_s, closed)
 		delete(c.points)
 		return
 	}
@@ -238,17 +238,17 @@ load_edge_tags :: proc(c: ^Component, s: string, path: string) {
 	parse_one :: proc(c: ^Component, tok: string, path: string) {
 		parts := strings.split_n(tok, ":", 3, context.temp_allocator)
 		if len(parts) < 2 {
-			fmt.eprintfln("svg: %q: bad edge tag %q, skipped", path, tok)
+			diagf(.Warn, "svg: %q: bad edge tag %q, skipped", path, tok)
 			return
 		}
 		seg, sok := strconv.parse_int(parts[0])
 		if !sok || seg < 0 { // negative would index seg_start[-1] → panic at eval
-			fmt.eprintfln("svg: %q: bad edge tag segment in %q, skipped", path, tok)
+			diagf(.Warn, "svg: %q: bad edge tag segment in %q, skipped", path, tok)
 			return
 		}
 		kind, kok := edge_tag_from_name(parts[1])
 		if !kok || kind == .None {
-			fmt.eprintfln("svg: %q: unknown edge tag kind %q, skipped", path, tok)
+			diagf(.Warn, "svg: %q: unknown edge tag kind %q, skipped", path, tok)
 			return
 		}
 		tag := Edge_Tag {
@@ -263,7 +263,7 @@ load_edge_tags :: proc(c: ^Component, s: string, path: string) {
 	i := 0
 	for i < len(toks) {
 		if !starts_tag(toks[i]) {
-			fmt.eprintfln("svg: %q: bad edge tag %q, skipped", path, toks[i])
+			diagf(.Warn, "svg: %q: bad edge tag %q, skipped", path, toks[i])
 			i += 1
 			continue
 		}
@@ -300,7 +300,7 @@ load_circle :: proc(doc: ^Document, el: ^xml.Element, path: string) {
 		return
 	}
 	if kind_s != "" && kind_s != "marker" {
-		fmt.eprintfln("svg: %q: circle with strata:kind=%q skipped", path, kind_s)
+		diagf(.Warn, "svg: %q: circle with strata:kind=%q skipped", path, kind_s)
 		delete(c.points)
 		return
 	}
