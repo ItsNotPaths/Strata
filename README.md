@@ -39,6 +39,23 @@ Diagnostics (parse warnings, eval skips, I/O failures) go through
 the default sink prints to stderr. Emits happen only from serial phases
 (load/save/eval build), never from mesh workers, so sinks need no locking.
 
+**Extension model: fork the whole thing.** strata is a reference pipeline,
+not a framework — there is deliberately no plugin system, game-profile
+format, or SDK seam anywhere, in the compiler or the editor. The repo is
+the product: fork it and make both halves yours. The stock compiler's
+semantics — Sectors carving canyon voids, walls derived from band
+disagreement, harmonic height fields — are one game's answer; yours might
+want invisible walls across an open expanse, `<strata:meta>` lines
+diverting compile effects your way, or component kinds this repo never
+imagined, and that means rewriting compiler passes, not configuring them.
+What carries between forks is the architecture: a top-down extended-SVG
+vector document as the only source of truth, a deterministic
+document → field → SDF → mesh evaluator behind it, and an editor bolted on
+as pure frontend. For small divergences the seams are already narrow:
+markers (class/model/args) and `meta` lines flow through opaque for
+game-side interpretation, and preview textures/models enter through one
+image loader and one `.glb` reader in `src/tool/`.
+
 Built with Odin; one binary holds the headless CLI (eval / dump / topo) and
 the M3 editor: SDL3_GPU 2D vector canvas + live 3D preview, Dear ImGui chrome.
 `vendor/` (static SDL3, prebuilt imgui lib, glslang, fonts) is copied from the
@@ -57,6 +74,8 @@ sibling `dymeta-tool` checkout.
                   viewers (export_obj.odin) + M3 editor: shell/frame loop
                   (editor.odin), 2D canvas render + edit (canvas2d.odin,
                   canvas_edit.odin), 3D preview (view3d.odin, camera3d.odin),
+                  preview assets — content-sniffed textures, .glb marker props,
+                  material palette (assets.odin, gltf.odin, palette.odin),
                   sidebar (sidebar.odin), GPU helpers (gpu.odin), earcut
     shaders/      GLSL -> SPIR-V, #load'ed into the binary
     content/      sample documents + golden outputs (§5)
@@ -71,9 +90,22 @@ sibling `dymeta-tool` checkout.
     tool/strata dump content/samples/canyon.strata.svg   # -> canyon.obj + canyon.txt beside the doc
     tool/strata topo content/samples/canyon.strata.svg   # walkability oracle
     tool/strata resave <doc> <out>                       # writer round-trip
+    tool/strata assets content/samples/assets            # validate a preview-assets dir
     tests/golden.sh                                      # regression suite (--update)
 
 Editor: `1`/`2` select/node mode, `3`–`9` draw Sector/Path/Solid/Bridge/Hint/
 Marker/Cliff (click points, Enter/first-point closes, Ctrl-click = corner node), wheel
 zoom, MMB/Space pan, `F` fit, `X` snap, Tab maximize pane, Ctrl+S/Z/Y/D,
 F5 re-eval. The 3D pane: RMB orbit, MMB pan, wheel dolly — pure preview.
+
+**Preview assets** (optional, editor-only): a directory of
+`textures/<recipe>.<any>` + `models/<name>.<any>` — files matched by stem,
+identified by content (images: png/jpeg/tga/bmp/qoi/netpbm via magic-byte
+sniffing; models: minimal binary glTF `.glb`). Resolved from `-assets=DIR` >
+`STRATA_ASSETS` > an `assets/` dir beside the opened document
+(`content/samples/assets/` demos it — open `props.strata.svg`). Textures
+drive the 3D pane's triplanar material preview keyed by recipe name;
+recipes without one keep a stable hash tint. `class="model"` markers draw
+their `.glb` at the resolved surface height; other classes draw as
+class-tinted pins. This is preview plumbing, not the game contract — a fork
+swaps the two loaders for its own texgen/model formats (DESIGN.md §6).
